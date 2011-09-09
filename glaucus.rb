@@ -130,7 +130,7 @@ class Server
       Net::SSH.start(public_ip, "root", :password => password) do|ssh|
         self.bootstrap_log = ssh.exec!("cd /tmp && wget #{config['sol_files_host']}/client_bootstrap.sh && bash /tmp/client_bootstrap.sh www-base")
       end
-    rescue rescue Net::SSH::AuthenticationFailed
+    rescue Net::SSH::AuthenticationFailed
       return false
     end
     return true
