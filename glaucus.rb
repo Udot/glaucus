@@ -11,7 +11,8 @@ require "yaml"
 # get all the gems in
 Bundler.require(:default)
 
-conf = YAML.load_file("conf_rackspace.yml")
+current_path = File.expand_path(File.dirname(__FILE__))
+conf = YAML.load_file("#{current_path}/config.yml")
 
 module EggApi
   require 'net/http'
@@ -24,15 +25,16 @@ module EggApi
 
   private
   def get(request)
-    config = YAML.load_file("#{SRC_DIR}/config/config.yml")
-    http_r = Net::HTTP.new(@config['egg_api']['host'], @config['egg_api']['port'])
+    current_path = File.expand_path(File.dirname(__FILE__))
+    config = YAML.load_file("#{current_path}/config.yml")
+    http_r = Net::HTTP.new(config['egg_api']['host'], config['egg_api']['port'])
     http_r.use_ssl = @config['egg_api']['ssl']
     response = nil
     begin
       http_r.start() do |http|
         req = Net::HTTP::Get.new('/api/web/' + request)
-        req.add_field("USERNAME", @config['egg_api']['username'])
-        req.add_field("TOKEN", @config['egg_api']['token'])
+        req.add_field("USERNAME", config['egg_api']['username'])
+        req.add_field("TOKEN", config['egg_api']['token'])
         response = http.request(req)
       end
       return [response.code, response.body]
@@ -42,14 +44,16 @@ module EggApi
     end
   end
   def post(request,payload)
-    http_r = Net::HTTP.new(@config['egg_api']['host'], @config['egg_api']['port'])
+    current_path = File.expand_path(File.dirname(__FILE__))
+    config = YAML.load_file("#{current_path}/config.yml")
+    http_r = Net::HTTP.new(config['egg_api']['host'], config['egg_api']['port'])
     http_r.use_ssl = config['egg_api']['ssl']
     response = nil
     begin
       http_r.start() do |http|
         req = Net::HTTP::Post.new(request, initheader = {'Content-Type' =>'application/json'})
-        req.add_field("USERNAME", @config['egg_api']['username'])
-        req.add_field("TOKEN", @config['egg_api']['token'])
+        req.add_field("USERNAME", config['egg_api']['username'])
+        req.add_field("TOKEN", config['egg_api']['token'])
         req.body = payload
         req.set_form_data(payload)
         response = http.request(req)
