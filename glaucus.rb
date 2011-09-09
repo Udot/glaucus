@@ -7,12 +7,17 @@ require "rubygems"
 require "bundler/setup"
 require "fileutils"
 require "yaml"
+require "net/ssh"
 
 # get all the gems in
 Bundler.require(:default)
 
 current_path = File.expand_path(File.dirname(__FILE__))
-conf = YAML.load_file("#{current_path}/config.yml")
+config = YAML.load_file("#{current_path}/config.yml")
+
+def is_mac?
+  RUBY_PLATFORM.downcase.include?("darwin")
+end
 
 module EggApi
   require 'net/http'
@@ -77,7 +82,7 @@ class Server
   # role is a chef role
   #
   attr_accessor :hostname, :nodename, :image, :flavor, :role, :log, :connection
-  attr_accessor :redis_queue, :redis_status, :token
+  attr_accessor :redis_queue, :redis_status, :token, :status
   # rackspace specific attributes
   attr_accessor :provider_id, :host_id, :image_name, :flavor_name, :metadata
   attr_accessor :public_ip, :private_ip, :password, :state, :progress
@@ -88,8 +93,10 @@ class Server
     config = YAML.load_file(current_path + "/config.yml")
     @hostname = hostname
     @nodename = hostname
-    @image = image
-    @flavor = flavor
+    @image = 10194286
+    @image = image unless(image == (nil || ""))
+    @flavor = 1
+    @flavor = flavor unless(flavor == (nil || ""))
     @role = role
     @provider_id = nil
     @token = token                    # unique identifier of server, will be written to /etc/sol_token.txt
@@ -105,13 +112,15 @@ class Server
     @redis_status = Redis.new(:host => config['redis']['host'], :port => config['redis']['port'], :password => config['redis']['password'], :db => config['redis']['status_db']) 
   end
 
+  def is_mac?
+    RUBY_PLATFORM.downcase.include?("darwin")
+  end
+
   def create
     server = connection.servers.create(
               :name => hostname,
               :image_id => image,
-              :flavor_id => flavor,
-              :metadata => ""
-            )
+              :flavor_id => flavor)
     server.wait_for { ready? }
     # server ready we store up stuff about the server
     self.provider_id = server.id
@@ -133,7 +142,7 @@ class Server
     result = ""
     begin
       Net::SSH.start(public_ip, "root", :password => password) do|ssh|
-        self.bootstrap_log = ssh.exec!("cd /tmp && wget #{config['sol_files_host']}/client_bootstrap.sh && bash /tmp/client_bootstrap.sh www-base")
+        self.bootstrap_log = ssh.exec!("echo #{token} > /etc/sol_token.txt && cd /tmp && wget #{config['sol_files_host']}/client_bootstrap.sh && bash /tmp/client_bootstrap.sh www-host")
       end
     rescue Net::SSH::AuthenticationFailed
       return false
@@ -153,7 +162,7 @@ class Server
       "public_ip" => public_ip,
       "private_ip" => private_ip,
       "state" => state,
-      "progess" => progess}
+      "progress" => progress}
     return arh
   end
 
@@ -175,7 +184,7 @@ class Server
     #      "started_at" => string,               # time of start of the process
     #      "finished_at" => string,              # time of finish of the status
     # }
-    old_status = JSON.parse(redis_status.get(token))
+    old_status = JSON.parse(redis_status.get(token)) if redis_status.get(token) != nil
     start_time = Time.now.to_s
     finish_time = Time.now.to_s
     start_time = old_status['started_at'] if old_status != nil
@@ -189,19 +198,23 @@ class Server
 
   def run
     set_status("spawning")
+    puts "Spawning at rackspace" if is_mac?
     self.create
-    set_status("created")
+    set_status("bootstrapping")
+    puts "Created at rackspace (now bootstrapping)" if is_mac?
     self.bootstrap
     set_status("running")
+    puts "Bootstrapped at rackspace" if is_mac?
   end
 end
 
 # input loop
 redis_queue = Redis.new(:host => config['redis']['host'], :port => config['redis']['port'], :password => config['redis']['password'], :db => config['redis']['queue_db'])
 
+puts "Starting up" if is_mac?
 while true
   queue = JSON.parse(redis_queue.get("queue")) unless redis_queue.get("queue") == nil
-  queue ||= Array.new
+  queue = Array.new if queue == nil
   while queue.size > 0
     # "queue" (jsoned) array with items :
     #    { "name" => string,         # hostname
@@ -211,12 +224,16 @@ while true
     #      "token" => string         # unique token to identify server, will be picked up by cuddy in /etc/sol_token.txt
     # }
     serv = queue.pop
-    # don't do any
-    server = Server.new(serv['name'], serv['role'], serv['image'], serv['flavor'], serv['token'])
-    fork {
-      server.run
-    }
-    redis_queue.set("queue", queue.to_json)
+    if (serv['token'] != nil)
+      puts "Spawning #{serv['name']} #{serv['token']} I: #{serv['image']} F: #{serv['flavor']} R: #{serv['role']}" if is_mac?
+      server = Server.new(serv['name'], serv['role'], serv['image'], serv['flavor'], serv['token'])
+      fork {
+        server.run
+      }
+      redis_queue.set("queue", queue.to_json)
+    else
+      puts "no token, no chocolate"
+    end
   end  
   sleep(10)
 end
