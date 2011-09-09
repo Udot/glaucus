@@ -212,6 +212,7 @@ while true
       server.run
     }
     redis_queue.set("queue", queue.to_json)
-  end
+  end  
+  sleep(10)
 end
 
