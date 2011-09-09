@@ -12,6 +12,55 @@ require "redis"
 
 conf = YAML.load_file("conf_rackspace.yml")
 
+module EggApi
+  require 'net/http'
+  require "net/https"
+  extend self
+
+  def register(register_json)
+    return post("/api/server/status",register_json)
+  end
+
+  private
+  def get(request)
+    config = YAML.load_file("#{SRC_DIR}/config/config.yml")
+    http_r = Net::HTTP.new(@config['egg_api']['host'], @config['egg_api']['port'])
+    http_r.use_ssl = @config['egg_api']['ssl']
+    response = nil
+    begin
+      http_r.start() do |http|
+        req = Net::HTTP::Get.new('/api/web/' + request)
+        req.add_field("USERNAME", @config['egg_api']['username'])
+        req.add_field("TOKEN", @config['egg_api']['token'])
+        response = http.request(req)
+      end
+      return [response.code, response.body]
+    rescue Errno::ECONNREFUSED
+      @logger.error("front server didn't answer !")
+      return [503, "unavailable"]
+    end
+  end
+  def post(request,payload)
+    http_r = Net::HTTP.new(@config['egg_api']['host'], @config['egg_api']['port'])
+    http_r.use_ssl = config['egg_api']['ssl']
+    response = nil
+    begin
+      http_r.start() do |http|
+        req = Net::HTTP::Post.new(request, initheader = {'Content-Type' =>'application/json'})
+        req.add_field("USERNAME", @config['egg_api']['username'])
+        req.add_field("TOKEN", @config['egg_api']['token'])
+        req.body = payload
+        req.set_form_data(payload)
+        response = http.request(req)
+      end
+    rescue Errno::ECONNREFUSED
+      return [503, "unavailable"]
+    end
+    return [response.code, response.body]
+  end
+end
+
+
 class Server
   # flavor :
   #     1 = 256MB RAM, 10GB HD
@@ -162,7 +211,7 @@ while true
     fork {
       server.run
     }
-    redis.set(@cuddy_token, queue.to_json)
+    redis_queue.set("queue", queue.to_json)
   end
 end
 
