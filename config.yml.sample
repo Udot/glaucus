@@ -1,0 +1,19 @@
+rackspace_username: "yourRSusername"
+rackspace_token: "yourtoken"
+rackspace_auth_host: "lon.auth.api.rackspacecloud.com"
+sol_files_host: "a_public_http_place"
+redis:
+  host: "iporhost"
+  port: "6379"
+  password: "password for redis"
+  queue_db: 4
+  status_db: 5
+egg_api:
+  host: "localhost"
+  port: 8080
+  ssl: false
+  token: "egg_token_get_if_from_main_web"
+  username: "egg_username"
+harry_token: "sometoken"
+harry_host: "host"
+harry_port: 8084
