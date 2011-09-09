@@ -4,11 +4,12 @@
 #     net-ssh net-ssh-multi fog highline --no-rdoc --no-ri --verbose
 #
 require "rubygems"
+require "bundler/setup"
+require "fileutils"
 require "yaml"
-require "json"
-require "fog"
-require "net/ssh"
-require "redis"
+
+# get all the gems in
+Bundler.require(:default)
 
 conf = YAML.load_file("conf_rackspace.yml")
 
